@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="application-name" content="Tally Counter">
+<meta name="description" content="A giant tap counter with a target goal, progress bar, and celebration beep.">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Tally Counter</title>
+<style>
+:root{--accent:#22D3EE;--bg:#071013;--card:#0E1B20;--text:#EFFBFF;--dim:#A9CFDA}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100dvh;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+body.flash{background:var(--accent);transition:background .15s}
+.app{width:min(480px,100vw - 24px);height:100dvh;max-height:780px;display:flex;flex-direction:column;padding:16px 14px 12px;gap:12px}
+h1{font-size:20px;color:var(--accent);text-align:center;letter-spacing:.5px}
+.count{font-size:96px;font-weight:900;text-align:center;line-height:1;color:var(--accent);padding:4px 0}
+.prog{position:relative;height:28px;background:var(--card);border:1px solid #1E3A44;border-radius:14px;overflow:hidden}
+.prog .fill{height:100%;width:0%;background:var(--accent);transition:width .2s}
+.prog span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700}
+.plus{flex:1;min-height:120px;font-size:64px;font-weight:900;border-radius:18px;border:none;background:var(--accent);color:#071013}
+.plus:active{transform:scale(.98)}
+.row{display:flex;gap:10px}
+.row button,.row input{min-height:56px;border-radius:14px;font-size:17px;font-weight:700;font-family:inherit}
+.row button{border:1px solid #1E3A44;background:#0E1B20;color:var(--text);padding:0 18px}
+.row input{flex:1;min-width:0;border:1px solid #1E3A44;background:#0E1B20;color:var(--text);padding:0 12px;-webkit-user-select:text;user-select:text}
+#reset.armed{background:#7F1D1D;border-color:var(--accent);color:#fff}
+button[data-focusable]:focus-visible,input[data-focusable]:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>Tally Counter</h1>
+  <div class="count" id="count" aria-live="polite">0</div>
+  <div class="prog"><div class="fill" id="fill"></div><span id="pct"></span></div>
+  <button class="plus" id="plus" data-focusable aria-label="Add one">+1</button>
+  <div class="row">
+    <button id="minus" data-focusable aria-label="Subtract one">−1</button>
+    <input type="number" id="targetInput" data-focusable min="1" placeholder="Target" inputmode="numeric">
+    <button id="setBtn" data-focusable>Set</button>
+    <button id="reset" data-focusable>Reset</button>
+  </div>
+</div>
+<script>
+(function(){"use strict";
+var KEY="tally-counter-v1";
+var count=0,target=0;
+var countEl=document.getElementById('count');
+var fillEl=document.getElementById('fill');
+var pctEl=document.getElementById('pct');
+var plusBtn=document.getElementById('plus');
+var minusBtn=document.getElementById('minus');
+var targetInput=document.getElementById('targetInput');
+var setBtn=document.getElementById('setBtn');
+var resetBtn=document.getElementById('reset');
+var resetArmed=false,resetTimer=null;
+
+function beep(){
+  try{
+    var C=window.AudioContext||window.webkitAudioContext;
+    if(!C)return;
+    var ctx=new C();
+    var o=ctx.createOscillator();
+    var g=ctx.createGain();
+    o.connect(g);g.connect(ctx.destination);
+    o.frequency.value=1046.5;
+    g.gain.setValueAtTime(0.25,ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.8);
+    o.start();o.stop(ctx.currentTime+0.8);
+  }catch(e){}
+}
+function flash(){
+  document.body.classList.add("flash");
+  setTimeout(function(){document.body.classList.remove("flash");},600);
+}
+function load(){
+  try{
+    var o=JSON.parse(localStorage.getItem(KEY)||"null");
+    if(o&&typeof o.count==="number")count=Math.max(0,Math.floor(o.count));
+    if(o&&typeof o.target==="number")target=Math.max(0,Math.floor(o.target));
+  }catch(e){}
+}
+function store(){
+  try{localStorage.setItem(KEY,JSON.stringify({count:count,target:target}));}catch(e){}
+}
+function progressPct(){
+  if(target<=0)return 0;
+  return Math.min(100,Math.round(count/target*100));
+}
+function render(){
+  countEl.textContent=count;
+  fillEl.style.width=progressPct()+"%";
+  pctEl.textContent=target>0?(count+" / "+target+" · "+progressPct()+"%"):"Set a target below";
+}
+function disarmReset(){
+  resetArmed=false;
+  if(resetTimer){clearTimeout(resetTimer);resetTimer=null;}
+  resetBtn.textContent="Reset";
+  resetBtn.classList.remove("armed");
+}
+plusBtn.addEventListener("click",function(){
+  count++;
+  if(target>0&&count===target){beep();flash();}
+  store();render();
+});
+minusBtn.addEventListener("click",function(){
+  count=Math.max(0,count-1);
+  store();render();
+});
+setBtn.addEventListener("click",function(){
+  var v=parseInt(targetInput.value,10);
+  target=(isNaN(v)||v<1)?0:Math.floor(v);
+  targetInput.value="";
+  store();render();
+});
+resetBtn.addEventListener("click",function(){
+  if(!resetArmed){
+    resetArmed=true;
+    resetBtn.textContent="Tap again";
+    resetBtn.classList.add("armed");
+    resetTimer=setTimeout(disarmReset,4000);
+  }else{
+    disarmReset();
+    count=0;
+    store();render();
+  }
+});
+
+function focusables(){
+  return Array.prototype.slice.call(document.querySelectorAll("[data-focusable]"))
+    .filter(function(el){return !el.disabled && el.offsetParent!==null;});
+}
+document.addEventListener("keydown",function(e){
+  if(e.key==="Enter"&&document.activeElement===targetInput)return;
+  var list=focusables();
+  if(!list.length)return;
+  var i=list.indexOf(document.activeElement);
+  if(e.key==="ArrowRight"||e.key==="ArrowDown"){
+    e.preventDefault();
+    list[(i+1+list.length)%list.length].focus();
+  }else if(e.key==="ArrowLeft"||e.key==="ArrowUp"){
+    e.preventDefault();
+    list[(i-1+list.length)%list.length].focus();
+  }
+});
+load();
+render();
+})();
+</script>
+</body>
+</html>
