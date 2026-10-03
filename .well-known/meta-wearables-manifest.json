@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "name": "Tally Counter",
+  "description": "A giant tap counter with a target goal, progress bar, and celebration beep.",
+  "appearance": {
+    "theme_color": "#22D3EE",
+    "icon": {
+      "src": "../icon-mono.png",
+      "type": "monochrome"
+    },
+    "icon_background": {
+      "colors": [
+        "#22D3EE",
+        "#14687A",
+        "#1E3A44",
+        "#071013"
+      ],
+      "stops": [
+        0.0,
+        0.33,
+        0.66,
+        1.0
+      ],
+      "inner_glow_color": "#C0F5FF"
+    }
+  }
+}
